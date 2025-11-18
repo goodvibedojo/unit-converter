@@ -4,13 +4,26 @@ import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { getAllCategories, getAllCompanies } from '../../utils/problemBank';
+import useSubscription from '../../hooks/useSubscription';
+import useAnalytics from '../../hooks/useAnalytics';
+import TrialBanner from '../Subscription/TrialBanner';
+import StatsCard from '../Analytics/StatsCard';
+import PerformanceChart from '../Analytics/PerformanceChart';
+import DifficultyBreakdown from '../Analytics/DifficultyBreakdown';
+import CategoryRadar from '../Analytics/CategoryRadar';
 
 export default function Dashboard() {
-  const { currentUser, userProfile, logout, canStartInterview, getRemainingTrialSessions } =
-    useAuth();
+  const { currentUser, userProfile, logout } = useAuth();
+  const { canStartInterview } = useSubscription();
+  const { trackPageView } = useAnalytics();
   const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Track page view
+  useEffect(() => {
+    trackPageView('dashboard', 'Dashboard');
+  }, [trackPageView]);
 
   useEffect(() => {
     fetchUserSessions();
@@ -59,10 +72,21 @@ export default function Dashboard() {
     }
   };
 
-  const stats = {
-    totalSessions: userProfile?.stats?.totalSessions || 0,
-    problemsSolved: userProfile?.stats?.problemsSolved || 0,
-    averageScore: userProfile?.stats?.averageScore || 0
+  const stats = userProfile?.stats || {
+    totalSessions: 0,
+    completedSessions: 0,
+    problemsSolved: 0,
+    averageScore: 0,
+    successRate: 0,
+    totalCodingTime: 0,
+    averageSessionDuration: 0,
+    streakDays: 0,
+    problemsByDifficulty: {
+      easy: { attempted: 0, solved: 0 },
+      medium: { attempted: 0, solved: 0 },
+      hard: { attempted: 0, solved: 0 }
+    },
+    categoriesStats: {}
   };
 
   return (
@@ -93,6 +117,12 @@ export default function Dashboard() {
                 className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
               >
                 Pricing
+              </Link>
+              <Link
+                to="/subscription"
+                className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Subscription
               </Link>
 
               <div className="relative group">
@@ -128,103 +158,55 @@ export default function Dashboard() {
         </div>
       </nav>
 
+      {/* Trial Banner */}
+      <TrialBanner />
+
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Trial Banner */}
-        {userProfile?.subscriptionStatus === 'trial' && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-blue-900">Free Trial</h3>
-                <p className="text-sm text-blue-700">
-                  {getRemainingTrialSessions()} free sessions remaining
-                </p>
-              </div>
-              <Link
-                to="/pricing"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Upgrade Now
-              </Link>
-            </div>
-          </div>
-        )}
-
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Sessions</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.totalSessions}</p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg
-                  className="w-6 h-6 text-blue-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Problems Solved</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.problemsSolved}</p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <svg
-                  className="w-6 h-6 text-green-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Average Score</p>
-                <p className="text-3xl font-bold text-gray-900">
-                  {Math.round(stats.averageScore)}%
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                <svg
-                  className="w-6 h-6 text-purple-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                  />
-                </svg>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <StatsCard
+            title="Total Sessions"
+            value={stats.totalSessions}
+            icon={
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            }
+            color="blue"
+          />
+          <StatsCard
+            title="Problems Solved"
+            value={stats.problemsSolved}
+            subtitle={`${stats.successRate}% success rate`}
+            icon={
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            }
+            color="green"
+          />
+          <StatsCard
+            title="Average Score"
+            value={`${Math.round(stats.averageScore)}/100`}
+            icon={
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            }
+            color="purple"
+          />
+          <StatsCard
+            title="Coding Time"
+            value={`${Math.round(stats.totalCodingTime)}h`}
+            subtitle={`${stats.streakDays} day streak`}
+            icon={
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            }
+            color="yellow"
+          />
         </div>
 
         {/* Start Interview CTA */}
@@ -243,6 +225,16 @@ export default function Dashboard() {
               Start Interview
             </button>
           </div>
+        </div>
+
+        {/* Analytics Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <PerformanceChart sessions={sessions} />
+          <DifficultyBreakdown problemsByDifficulty={stats.problemsByDifficulty} />
+        </div>
+
+        <div className="mb-8">
+          <CategoryRadar categoriesStats={stats.categoriesStats} />
         </div>
 
         {/* Recent Sessions */}

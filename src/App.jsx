@@ -5,6 +5,9 @@ import Login from './components/Auth/Login';
 import Signup from './components/Auth/Signup';
 import Dashboard from './components/Dashboard/Dashboard';
 import InterviewSession from './components/Interview/InterviewSession';
+import PricingPage from './components/Subscription/PricingPage';
+import SubscriptionManager from './components/Subscription/SubscriptionManager';
+import AdminPanel from './components/Admin/AdminPanel';
 import './App.css';
 
 // Landing Page Component
@@ -120,20 +123,6 @@ function LandingPage() {
 }
 
 // Placeholder components for future implementation
-function PricingPage() {
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold mb-4">Pricing</h1>
-        <p className="text-gray-600">Pricing page coming soon (Phase 7)</p>
-        <a href="/dashboard" className="mt-4 inline-block text-blue-600 hover:text-blue-700">
-          ← Back to Dashboard
-        </a>
-      </div>
-    </div>
-  );
-}
-
 function HistoryPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -148,6 +137,31 @@ function HistoryPage() {
   );
 }
 
+function SubscriptionPage() {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <nav className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
+              <h1 className="text-2xl font-bold text-blue-600">AI Mock Interview</h1>
+            </div>
+            <div className="flex items-center">
+              <a href="/dashboard" className="text-blue-600 hover:text-blue-700">
+                ← Back to Dashboard
+              </a>
+            </div>
+          </div>
+        </div>
+      </nav>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <h1 className="text-3xl font-bold mb-6">Manage Subscription</h1>
+        <SubscriptionManager />
+      </div>
+    </div>
+  );
+}
+
 function SettingsPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -156,6 +170,32 @@ function SettingsPage() {
         <p className="text-gray-600">Settings page coming soon</p>
         <a href="/dashboard" className="mt-4 inline-block text-blue-600 hover:text-blue-700">
           ← Back to Dashboard
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function SubscriptionSuccessPage() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center max-w-md">
+        <div className="mb-6">
+          <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        </div>
+        <h1 className="text-3xl font-bold mb-4 text-gray-900">Subscription Successful!</h1>
+        <p className="text-gray-600 mb-8">
+          Thank you for subscribing! You now have unlimited access to all interview sessions.
+        </p>
+        <a
+          href="/dashboard"
+          className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold"
+        >
+          Go to Dashboard
         </a>
       </div>
     </div>
@@ -203,6 +243,30 @@ function App() {
             element={
               <ProtectedRoute>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/subscription"
+            element={
+              <ProtectedRoute>
+                <SubscriptionPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/subscription/success"
+            element={
+              <ProtectedRoute>
+                <SubscriptionSuccessPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminPanel />
               </ProtectedRoute>
             }
           />
