@@ -5,7 +5,8 @@ import {
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
@@ -81,6 +82,11 @@ export function AuthProvider({ children }) {
     return signOut(auth);
   }
 
+  // Reset password
+  function resetPassword(email) {
+    return sendPasswordResetEmail(auth, email);
+  }
+
   // Fetch user profile from Firestore
   async function fetchUserProfile(uid) {
     const userDoc = await getDoc(doc(db, 'users', uid));
@@ -133,6 +139,7 @@ export function AuthProvider({ children }) {
     login,
     logout,
     signInWithGoogle,
+    resetPassword,
     canStartInterview,
     getRemainingTrialSessions,
     fetchUserProfile
