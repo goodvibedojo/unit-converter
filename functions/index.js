@@ -7,6 +7,7 @@
  * - problems: Problem bank management
  * - payments: Stripe subscription management
  * - realtime: Real-time listeners and presence management
+ * - voice: Voice features (transcription and text-to-speech)
  */
 
 const admin = require('firebase-admin');
@@ -42,3 +43,9 @@ exports.cancelSubscription = require('./payments/cancelSubscription');
 exports.subscribeToSession = require('./realtime/subscribeToSession').subscribeToSession;
 exports.updatePresence = require('./realtime/updatePresence').updatePresence;
 exports.getOnlineUsers = require('./realtime/updatePresence').getOnlineUsers;
+
+// Voice functions
+exports.voiceChat = require('./voice/voiceChat').voiceChat;
+exports.transcribeAudio = require('./voice/transcribeAudio').transcribeAudio;
+exports.generateSpeech = require('./voice/generateSpeech').generateSpeech;
+exports.getAvailableVoices = require('./voice/generateSpeech').getAvailableVoices;
