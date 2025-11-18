@@ -6,6 +6,7 @@
  * - interviews: Interview session management
  * - problems: Problem bank management
  * - payments: Stripe subscription management
+ * - realtime: Real-time listeners and presence management
  */
 
 const admin = require('firebase-admin');
@@ -36,3 +37,8 @@ exports.seedProblems = require('./problems/seedProblems');
 exports.createCheckoutSession = require('./payments/createCheckoutSession');
 exports.webhookHandler = require('./payments/webhookHandler');
 exports.cancelSubscription = require('./payments/cancelSubscription');
+
+// Real-time functions
+exports.subscribeToSession = require('./realtime/subscribeToSession').subscribeToSession;
+exports.updatePresence = require('./realtime/updatePresence').updatePresence;
+exports.getOnlineUsers = require('./realtime/updatePresence').getOnlineUsers;

@@ -11,14 +11,7 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { validateSessionId, validateCode, validateLanguage } = require('../utils/validators');
-
-// Language ID mapping for Judge0 API
-const LANGUAGE_IDS = {
-  python: 71, // Python 3
-  javascript: 63, // JavaScript (Node.js)
-  java: 62, // Java
-  cpp: 54, // C++ (GCC 9.2.0)
-};
+const { executeCode: executeWithJudge0, isJudge0Configured } = require('../utils/judge0Service');
 
 exports.executeCode = functions.https.onCall(async (data, context) => {
   try {
@@ -65,23 +58,22 @@ exports.executeCode = functions.https.onCall(async (data, context) => {
       );
     }
 
-    // For MVP: Mock code execution
-    // TODO: Integrate Judge0 API or Docker sandbox
-    const useMockExecution = process.env.USE_MOCK_EXECUTION !== 'false';
+    // Execute code using Judge0 if configured, otherwise use mock
+    const useMockExecution = process.env.USE_MOCK_EXECUTION !== 'false' || !isJudge0Configured();
 
     let executionResult;
     if (useMockExecution) {
+      console.log('Using mock code execution');
       executionResult = mockExecuteCode(code, language, stdin);
     } else {
-      // TODO: Integrate with Judge0 API
-      // executionResult = await executeWithJudge0(code, language, stdin);
-      executionResult = {
-        stdout: 'Judge0 integration coming soon!',
-        stderr: '',
-        exitCode: 0,
-        executionTime: 0,
-        memory: 0,
-      };
+      console.log('Using Judge0 code execution');
+      executionResult = await executeWithJudge0({
+        code,
+        language,
+        stdin,
+        timeout: 10,
+        memoryLimit: 524288, // 512MB
+      });
     }
 
     console.log('Code executed for session:', sessionId);
@@ -140,11 +132,3 @@ function mockExecuteCode(code, language, stdin) {
   };
 }
 
-/**
- * Execute code using Judge0 API
- * TODO: Implement this function
- */
-async function executeWithJudge0(code, language, stdin) {
-  // Implementation will be added when integrating Judge0
-  throw new Error('Judge0 integration not yet implemented');
-}

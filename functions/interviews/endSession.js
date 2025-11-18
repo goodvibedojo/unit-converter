@@ -9,6 +9,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { validateSessionId } = require('../utils/validators');
 const { generateFinalFeedback } = require('../utils/mockAI');
+const { generateFeedback: generateOpenAIFeedback, isOpenAIConfigured } = require('../utils/openaiService');
 
 exports.endSession = functions.https.onCall(async (data, context) => {
   try {
@@ -60,12 +61,34 @@ exports.endSession = functions.https.onCall(async (data, context) => {
     const duration = Math.floor((endTime - startTime) / 1000 / 60); // minutes
 
     // Generate AI feedback
+    // Use OpenAI if configured, otherwise fall back to mock
     const finalTestResults = testResults || sessionData.testResults;
-    const feedback = generateFinalFeedback({
-      code: sessionData.code,
-      testResults: finalTestResults,
-      duration,
-    });
+    const useMockAI = process.env.USE_MOCK_AI !== 'false' || !isOpenAIConfigured();
+
+    // Get problem details for feedback context
+    const problemRef = db.collection('problems').doc(sessionData.problemId);
+    const problemDoc = await problemRef.get();
+    const problemData = problemDoc.exists ? problemDoc.data() : {};
+
+    let feedback;
+    if (useMockAI) {
+      console.log('Using mock AI for feedback');
+      feedback = generateFinalFeedback({
+        code: sessionData.currentCode || sessionData.code || '',
+        testResults: finalTestResults,
+        duration,
+      });
+    } else {
+      console.log('Using OpenAI GPT-4 for feedback');
+      feedback = await generateOpenAIFeedback({
+        code: sessionData.currentCode || sessionData.code || '',
+        problemTitle: problemData.title || 'Unknown Problem',
+        problemDescription: problemData.description || '',
+        testResults: finalTestResults,
+        chatHistory: sessionData.chatHistory || [],
+        durationMinutes: duration,
+      });
+    }
 
     // Update session
     const updateData = {

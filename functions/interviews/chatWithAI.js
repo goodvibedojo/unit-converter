@@ -9,6 +9,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { validateSessionId, validateMessage } = require('../utils/validators');
 const { generateMockResponse } = require('../utils/mockAI');
+const { generateAIResponse, isOpenAIConfigured } = require('../utils/openaiService');
 
 exports.chatWithAI = functions.https.onCall(async (data, context) => {
   try {
@@ -73,25 +74,29 @@ exports.chatWithAI = functions.https.onCall(async (data, context) => {
     };
 
     // Generate AI response
-    // In production, this would call OpenAI API
-    // For now, using mock AI service
-    const useMockAI = process.env.USE_MOCK_AI !== 'false'; // Default to true
+    // Use OpenAI if configured, otherwise fall back to mock
+    const useMockAI = process.env.USE_MOCK_AI !== 'false' || !isOpenAIConfigured();
 
     let aiResponse;
     if (useMockAI) {
+      console.log('Using mock AI service');
       aiResponse = generateMockResponse({
         userMessage: message,
-        code: sessionData.code,
+        code: sessionData.currentCode || sessionData.code || '',
         problemTitle: problemData?.title || 'Unknown Problem',
         phase: 'coding',
         chatHistory: sessionData.chatHistory || [],
       });
     } else {
-      // TODO: Integrate OpenAI API
-      // const OpenAI = require('openai');
-      // const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      // aiResponse = await callOpenAI(...)
-      aiResponse = 'OpenAI integration coming soon!';
+      console.log('Using OpenAI GPT-4');
+      aiResponse = await generateAIResponse({
+        userMessage: message,
+        code: sessionData.currentCode || sessionData.code || '',
+        problemTitle: problemData?.title || 'Unknown Problem',
+        problemDescription: problemData?.description || '',
+        chatHistory: sessionData.chatHistory || [],
+        phase: 'coding',
+      });
     }
 
     const aiMessage = {
