@@ -8,6 +8,7 @@ import InterviewSession from './components/Interview/InterviewSession';
 import PricingPage from './components/Subscription/PricingPage';
 import SubscriptionManager from './components/Subscription/SubscriptionManager';
 import AdminPanel from './components/Admin/AdminPanel';
+import HistoryPage from './components/History/HistoryPage';
 import './App.css';
 
 // Landing Page Component
@@ -123,19 +124,6 @@ function LandingPage() {
 }
 
 // Placeholder components for future implementation
-function HistoryPage() {
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold mb-4">Session History</h1>
-        <p className="text-gray-600">History page coming soon (Phase 6)</p>
-        <a href="/dashboard" className="mt-4 inline-block text-blue-600 hover:text-blue-700">
-          ← Back to Dashboard
-        </a>
-      </div>
-    </div>
-  );
-}
 
 function SubscriptionPage() {
   return (

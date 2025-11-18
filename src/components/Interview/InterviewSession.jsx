@@ -12,10 +12,12 @@ import Terminal from '../Terminal/Terminal';
 import ChatInterface from './ChatInterface';
 import ProblemDisplay from './ProblemDisplay';
 import TestCasePanel from '../TestCases/TestCasePanel';
+import { useAnalytics } from '../../hooks/useAnalytics';
 
 export default function InterviewSession() {
   const { currentUser, userProfile, canStartInterview } = useAuth();
   const navigate = useNavigate();
+  const analytics = useAnalytics();
 
   // Session state
   const [sessionId, setSessionId] = useState(null);
@@ -29,6 +31,8 @@ export default function InterviewSession() {
   const [testResults, setTestResults] = useState(null);
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [codeChangeCount, setCodeChangeCount] = useState(0);
+  const [testRunCount, setTestRunCount] = useState(0);
 
   // Check if user can start interview
   useEffect(() => {
@@ -80,6 +84,14 @@ export default function InterviewSession() {
       setSessionId(newSessionId);
       setSessionStartTime(Date.now());
 
+      // Track interview start
+      analytics.trackInterviewStart({
+        sessionId: newSessionId,
+        problemId: selectedProblem.id,
+        difficulty: selectedProblem.difficulty,
+        category: selectedProblem.category[0]
+      });
+
       // Initialize AI interviewer
       const aiIntroMessage = openAIService.initializeInterview(
         `${selectedProblem.title}\n\n${selectedProblem.description}`
@@ -107,13 +119,24 @@ export default function InterviewSession() {
   // Handle code changes
   const handleCodeChange = async (newCode) => {
     setCode(newCode);
+    setCodeChangeCount(prev => prev + 1);
+
+    // Track code execution analytics (throttled)
+    if (codeChangeCount % 10 === 0) {
+      analytics.trackCodeExecution({
+        sessionId,
+        language,
+        linesOfCode: newCode.split('\n').length
+      });
+    }
 
     // Auto-save to Firestore with debouncing
     if (sessionId) {
       // In production, use debouncing to reduce writes
       await updateDoc(doc(db, 'sessions', sessionId), {
         code: newCode,
-        lastUpdated: new Date()
+        lastUpdated: new Date(),
+        codeHistory: codeChangeCount
       });
     }
   };
@@ -137,6 +160,15 @@ export default function InterviewSession() {
 
     setMessages(prev => [...prev, newUserMessage]);
     setIsAITyping(true);
+
+    // Track AI interaction
+    const isHintRequest = userMessage.toLowerCase().includes('hint') ||
+                          userMessage.toLowerCase().includes('help');
+    analytics.trackAIInteraction({
+      sessionId,
+      type: isHintRequest ? 'hint_request' : 'message',
+      messageCount: messages.length + 1
+    });
 
     try {
       // Send to AI with code context
@@ -207,6 +239,7 @@ export default function InterviewSession() {
     if (!problem || !problem.testCases) return;
 
     setIsRunning(true);
+    setTestRunCount(prev => prev + 1);
     setTerminalOutput([{ type: 'info', text: '$ Running test cases...' }]);
 
     try {
@@ -217,6 +250,15 @@ export default function InterviewSession() {
       );
 
       setTestResults(results);
+
+      // Track test run analytics
+      analytics.trackTestRun({
+        sessionId,
+        passed: results.passed,
+        total: results.total,
+        language,
+        score: results.score
+      });
 
       setTerminalOutput(prev => [
         ...prev,
@@ -229,7 +271,8 @@ export default function InterviewSession() {
       // Save results to Firestore
       if (sessionId) {
         await updateDoc(doc(db, 'sessions', sessionId), {
-          testResults: results
+          testResults: results,
+          testRunCount
         });
       }
     } catch (error) {
@@ -254,10 +297,30 @@ export default function InterviewSession() {
 
     try {
       if (sessionId) {
+        const duration = Math.floor((Date.now() - sessionStartTime) / 1000);
+        const testsPassedPercent = testResults
+          ? Math.round((testResults.passed / testResults.total) * 100)
+          : 0;
+        const problemSolved = testResults && testResults.passed === testResults.total;
+
+        // Track interview end
+        analytics.trackInterviewEnd({
+          sessionId,
+          duration,
+          testsPassedPercent,
+          problemSolved,
+          codeChanges: codeChangeCount,
+          testRuns: testRunCount,
+          messagesExchanged: messages.length
+        });
+
         await updateDoc(doc(db, 'sessions', sessionId), {
           endTime: new Date(),
           completed: true,
-          finalCode: code
+          finalCode: code,
+          duration,
+          codeChangeCount,
+          testRunCount
         });
       }
 
