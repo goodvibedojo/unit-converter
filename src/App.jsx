@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import './App.css'
 
 const unitTypes = {
@@ -32,33 +32,6 @@ const unitTypes = {
       kelvin: 'kelvin',
     }
   }
-}
-
-function CarbonAd() {
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.async = true;
-    script.type = 'text/javascript';
-    script.src = '//cdn.carbonads.com/carbon.js?serve=CESDK53J&placement=a-easy-unit-converternetlifyapp';
-    script.id = '_carbonads_js';
-
-    const adContainer = document.getElementById('carbon-ad');
-    if (adContainer) {
-      while (adContainer.firstChild) {
-        adContainer.removeChild(adContainer.firstChild);
-      }
-      adContainer.appendChild(script);
-    }
-
-    return () => {
-      const ad = document.getElementById('_carbonads_js');
-      if (ad) {
-        ad.remove();
-      }
-    };
-  }, []);
-
-  return <div id="carbon-ad" className="carbon-ad" />;
 }
 
 function App() {
@@ -117,30 +90,14 @@ function App() {
 
   return (
     <div className="app-wrapper">
-      <div className="ad-space top-ad">
-        <CarbonAd />
-      </div>
-      
-      <div className="ad-space left-ad">
-        <div className="affiliate-products">
-          <h4>Length & Distance</h4>
-          <a href="https://www.amazon.com/Komelon-SL2825-Self-Lock-Power-25-Foot/dp/B000BQKXLE?&linkCode=ll1&tag=YOUR-TAG-20" target="_blank" rel="noopener noreferrer">
-            Professional Measuring Tape
-          </a>
-          <a href="https://www.amazon.com/Calculated-Industries-8025-Construction-Calculator/dp/B00022749Q?&linkCode=ll1&tag=YOUR-TAG-20" target="_blank" rel="noopener noreferrer">
-            Construction Calculator
-          </a>
-        </div>
-      </div>
-
       <div className="converter-container">
         <h1>Unit Converter</h1>
-        
+
         <div className="converter-form">
           <div className="type-selector">
             <label htmlFor="type">Conversion Type:</label>
-            <select 
-              id="type" 
+            <select
+              id="type"
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value)}
             >
@@ -192,22 +149,6 @@ function App() {
 
           <button onClick={convert}>Convert</button>
         </div>
-      </div>
-
-      <div className="ad-space right-ad">
-        <div className="affiliate-products">
-          <h4>Weight & Temperature</h4>
-          <a href="https://www.amazon.com/Etekcity-Kitchen-Stainless-Temperature-Batteries/dp/B0113UZJE2?&linkCode=ll1&tag=YOUR-TAG-20" target="_blank" rel="noopener noreferrer">
-            Digital Food Scale
-          </a>
-          <a href="https://www.amazon.com/ThermoPro-TP03-Digital-Instant-Temperature/dp/B01IHHLB3W?&linkCode=ll1&tag=YOUR-TAG-20" target="_blank" rel="noopener noreferrer">
-            Digital Thermometer
-          </a>
-        </div>
-      </div>
-
-      <div className="ad-space bottom-ad">
-        <CarbonAd />
       </div>
     </div>
   )
