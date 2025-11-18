@@ -8,6 +8,8 @@ const admin = require('firebase-admin');
 const judge0Client = require('./utils/judge0Client');
 const securityChecker = require('./utils/securityChecker');
 const testValidator = require('./utils/testValidator');
+const cacheManager = require('./utils/cacheManager');
+const performanceMonitor = require('./utils/performanceMonitor');
 
 /**
  * Run test cases against user code
@@ -67,7 +69,30 @@ exports.runTestCases = functions.https.onCall(async (data, context) => {
       );
     }
 
-    // 4. Security check on code
+    // 4. Check cache first
+    const cachedResults = await cacheManager.getCachedTestResults(code, testCases, language);
+    if (cachedResults) {
+      console.log('[runTestCases] Cache hit! Returning cached test results');
+      const totalTime = Date.now() - startTime;
+
+      // Record performance metrics
+      performanceMonitor.recordTestRun({
+        testCount: testCases.length,
+        passed: cachedResults.passed,
+        totalTime,
+        cached: true,
+        language,
+        userId,
+      });
+
+      return {
+        ...cachedResults,
+        totalTime,
+        cached: true,
+      };
+    }
+
+    // 5. Security check on code
     const securityCheck = securityChecker.checkCode(code, language);
     if (!securityCheck.safe) {
       console.warn('[runTestCases] Security check failed:', securityCheck.issues);
@@ -78,7 +103,7 @@ exports.runTestCases = functions.https.onCall(async (data, context) => {
       );
     }
 
-    // 5. Rate limiting (for test runs)
+    // 6. Rate limiting (for test runs)
     const rateLimitOk = await checkTestRunRateLimit(userId);
     if (!rateLimitOk) {
       throw new functions.https.HttpsError(
@@ -163,14 +188,28 @@ exports.runTestCases = functions.https.onCall(async (data, context) => {
       report,
       totalTime,
       executionStats: report.executionStats,
+      cached: false,
     };
 
-    // 8. Save test results to session (if sessionId provided)
+    // 8. Record performance metrics
+    performanceMonitor.recordTestRun({
+      testCount: testCases.length,
+      passed,
+      totalTime,
+      cached: false,
+      language,
+      userId,
+    });
+
+    // 9. Cache test results
+    await cacheManager.cacheTestResults(code, testCases, language, response);
+
+    // 10. Save test results to session (if sessionId provided)
     if (sessionId) {
       await saveTestResults(userId, sessionId, response);
     }
 
-    // 9. Log test run
+    // 11. Log test run
     await logTestRun(userId, {
       language,
       testCount: testCases.length,

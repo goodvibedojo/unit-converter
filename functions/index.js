@@ -11,9 +11,22 @@ admin.initializeApp();
 // Export functions
 const { executeCode } = require('./executeCode');
 const { runTestCases } = require('./runTestCases');
+const { getProblems, getProblemStats } = require('./getProblems');
+const {
+  getPerformanceMetrics,
+  getPerformanceReport,
+  clearExpiredCache,
+  scheduledCacheClear,
+} = require('./getMetrics');
 
 exports.executeCode = executeCode;
 exports.runTestCases = runTestCases;
+exports.getProblems = getProblems;
+exports.getProblemStats = getProblemStats;
+exports.getPerformanceMetrics = getPerformanceMetrics;
+exports.getPerformanceReport = getPerformanceReport;
+exports.clearExpiredCache = clearExpiredCache;
+exports.scheduledCacheClear = scheduledCacheClear;
 
 // Health check function
 const functions = require('firebase-functions');

@@ -52,7 +52,7 @@ class Judge0Client {
   }
 
   /**
-   * Submit code for execution
+   * Submit code for execution with retry logic
    * @param {Object} options - Execution options
    * @param {string} options.code - Source code to execute
    * @param {string} options.language - Programming language
@@ -60,60 +60,55 @@ class Judge0Client {
    * @returns {Promise<string>} Submission token
    */
   async submitCode({ code, language, stdin = '' }) {
-    try {
-      const languageId = this.getLanguageId(language);
+    const languageId = this.getLanguageId(language);
 
-      const submission = {
-        source_code: code,
-        language_id: languageId,
-        stdin: stdin,
-        cpu_time_limit: this.maxTime,
-        memory_limit: this.maxMemory,
-        enable_network: false, // Security: disable network access
-      };
+    const submission = {
+      source_code: code,
+      language_id: languageId,
+      stdin: stdin,
+      cpu_time_limit: this.maxTime,
+      memory_limit: this.maxMemory,
+      enable_network: false, // Security: disable network access
+    };
 
-      console.log('[Judge0] Submitting code:', {
-        language,
-        languageId,
-        codeLength: code.length,
-        hasStdin: !!stdin,
-      });
+    console.log('[Judge0] Submitting code:', {
+      language,
+      languageId,
+      codeLength: code.length,
+      hasStdin: !!stdin,
+    });
 
-      const response = await this.client.post('/submissions', submission, {
+    // Use retry wrapper for submission
+    const response = await this._withRetry(async () => {
+      return await this.client.post('/submissions', submission, {
         params: {
           base64_encoded: 'false',
           wait: 'false', // Async submission
         },
       });
+    }, 'submitCode');
 
-      const token = response.data.token;
-      console.log('[Judge0] Submission created:', token);
-      return token;
-    } catch (error) {
-      console.error('[Judge0] Submission error:', error.response?.data || error.message);
-      throw this._handleError(error);
-    }
+    const token = response.data.token;
+    console.log('[Judge0] Submission created:', token);
+    return token;
   }
 
   /**
-   * Get submission result
+   * Get submission result with retry logic
    * @param {string} token - Submission token
    * @returns {Promise<Object>} Execution result
    */
   async getSubmission(token) {
-    try {
-      const response = await this.client.get(`/submissions/${token}`, {
+    const response = await this._withRetry(async () => {
+      return await this.client.get(`/submissions/${token}`, {
         params: {
           base64_encoded: 'false',
           fields: '*',
         },
       });
+    }, 'getSubmission');
 
-      return response.data;
-    } catch (error) {
-      console.error('[Judge0] Get submission error:', error.response?.data || error.message);
-      throw this._handleError(error);
-    }
+    return response.data;
   }
 
   /**
@@ -305,6 +300,69 @@ class Judge0Client {
    */
   _sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Execute function with exponential backoff retry
+   * @param {Function} fn - Async function to execute
+   * @param {string} operation - Operation name for logging
+   * @param {number} maxRetries - Maximum retry attempts (default: 3)
+   * @returns {Promise<any>} Function result
+   */
+  async _withRetry(fn, operation, maxRetries = 3) {
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error;
+
+        // Check if error is retryable
+        const isRetryable = this._isRetryableError(error);
+        const isLastAttempt = attempt === maxRetries;
+
+        if (!isRetryable || isLastAttempt) {
+          console.error(`[Judge0] ${operation} failed (attempt ${attempt}/${maxRetries}):`, error.message);
+          throw this._handleError(error);
+        }
+
+        // Calculate backoff delay: 1s, 2s, 4s
+        const delayMs = Math.pow(2, attempt - 1) * 1000;
+
+        console.warn(`[Judge0] ${operation} failed (attempt ${attempt}/${maxRetries}), retrying in ${delayMs}ms:`, {
+          error: error.message,
+          status: error.response?.status,
+        });
+
+        await this._sleep(delayMs);
+      }
+    }
+
+    throw this._handleError(lastError);
+  }
+
+  /**
+   * Check if error is retryable
+   * @param {Error} error - Error object
+   * @returns {boolean} True if error should be retried
+   */
+  _isRetryableError(error) {
+    // Retry on network errors
+    if (error.code === 'ECONNABORTED' || error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
+      return true;
+    }
+
+    // Retry on specific HTTP status codes
+    if (error.response) {
+      const status = error.response.status;
+      // Retry on: 429 (Too Many Requests), 500-599 (Server Errors), 503 (Service Unavailable)
+      if (status === 429 || status === 503 || (status >= 500 && status < 600)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 }
 

@@ -7,6 +7,8 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const judge0Client = require('./utils/judge0Client');
 const securityChecker = require('./utils/securityChecker');
+const cacheManager = require('./utils/cacheManager');
+const performanceMonitor = require('./utils/performanceMonitor');
 
 /**
  * Execute user code
@@ -58,7 +60,29 @@ exports.executeCode = functions.https.onCall(async (data, context) => {
       );
     }
 
-    // 4. Security check
+    // 4. Check cache first
+    const cachedResult = await cacheManager.getCachedExecution(code, language, stdin);
+    if (cachedResult) {
+      console.log('[executeCode] Cache hit! Returning cached result');
+      const totalTime = Date.now() - startTime;
+
+      // Record cache hit
+      performanceMonitor.recordExecution({
+        success: cachedResult.success,
+        executionTime: totalTime,
+        cached: true,
+        language,
+        userId,
+      });
+
+      return {
+        ...cachedResult,
+        totalTime,
+        cached: true,
+      };
+    }
+
+    // 5. Security check
     const securityCheck = securityChecker.checkCode(code, language);
     if (!securityCheck.safe) {
       console.warn('[executeCode] Security check failed:', securityCheck.issues);
@@ -69,13 +93,13 @@ exports.executeCode = functions.https.onCall(async (data, context) => {
       );
     }
 
-    // 5. Log security warnings
+    // 6. Log security warnings
     const warnings = securityCheck.issues.filter(i => i.severity === 'warning');
     if (warnings.length > 0) {
       console.warn('[executeCode] Security warnings:', warnings);
     }
 
-    // 6. Execute code via Judge0
+    // 7. Execute code via Judge0
     console.log('[executeCode] Executing code:', {
       language,
       codeLength: code.length,
@@ -88,7 +112,7 @@ exports.executeCode = functions.https.onCall(async (data, context) => {
       stdin,
     });
 
-    // 7. Sanitize output
+    // 8. Sanitize output
     if (result.output) {
       result.output = securityChecker.sanitizeOutput(result.output);
     }
@@ -96,7 +120,21 @@ exports.executeCode = functions.https.onCall(async (data, context) => {
       result.error = securityChecker.sanitizeOutput(result.error);
     }
 
-    // 8. Log execution
+    // 9. Cache successful results
+    if (result.success) {
+      await cacheManager.cacheExecution(code, language, stdin, result);
+    }
+
+    // 10. Record performance metrics
+    performanceMonitor.recordExecution({
+      success: result.success,
+      executionTime: result.executionTime,
+      cached: false,
+      language,
+      userId,
+    });
+
+    // 11. Log execution
     const totalTime = Date.now() - startTime;
     await logExecution(userId, {
       language,
@@ -115,6 +153,7 @@ exports.executeCode = functions.https.onCall(async (data, context) => {
     return {
       ...result,
       totalTime,
+      cached: false,
     };
   } catch (error) {
     console.error('[executeCode] Error:', error);
