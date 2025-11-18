@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { getRandomProblem } from '../../utils/problemBank';
@@ -12,6 +12,7 @@ import Terminal from '../Terminal/Terminal';
 import ChatInterface from './ChatInterface';
 import ProblemDisplay from './ProblemDisplay';
 import TestCasePanel from '../TestCases/TestCasePanel';
+import { Button, Badge, Modal, Tooltip, Spinner } from '../common';
 
 export default function InterviewSession() {
   const { currentUser, userProfile, canStartInterview } = useAuth();
@@ -29,6 +30,8 @@ export default function InterviewSession() {
   const [testResults, setTestResults] = useState(null);
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [showEndModal, setShowEndModal] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Check if user can start interview
   useEffect(() => {
@@ -54,6 +57,8 @@ export default function InterviewSession() {
 
   async function initializeSession() {
     try {
+      setIsInitializing(true);
+
       // Get a random problem
       const selectedProblem = getRandomProblem('easy'); // Start with easy for demo
       setProblem(selectedProblem);
@@ -101,6 +106,8 @@ export default function InterviewSession() {
       });
     } catch (error) {
       console.error('Error initializing session:', error);
+    } finally {
+      setIsInitializing(false);
     }
   }
 
@@ -244,14 +251,6 @@ export default function InterviewSession() {
 
   // Handle ending session
   const handleEndSession = async () => {
-    if (
-      !window.confirm(
-        'Are you sure you want to end this interview session? Your progress will be saved.'
-      )
-    ) {
-      return;
-    }
-
     try {
       if (sessionId) {
         await updateDoc(doc(db, 'sessions', sessionId), {
@@ -274,51 +273,101 @@ export default function InterviewSession() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Get status color
+  const getStatusBadge = () => {
+    if (testResults) {
+      const passRate = (testResults.passed / testResults.total) * 100;
+      if (passRate === 100) return <Badge variant="success">All Tests Passed</Badge>;
+      if (passRate >= 50) return <Badge variant="warning">Partially Passing</Badge>;
+      return <Badge variant="danger">Tests Failing</Badge>;
+    }
+    return <Badge variant="default">Not Tested</Badge>;
+  };
+
+  // Show loading state
+  if (isInitializing) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-100">
+        <Spinner size="xl" text="Initializing interview session..." centered />
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-gray-100">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3">
+      <div className="bg-white border-b border-gray-200 px-6 py-3 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-bold text-gray-900">Mock Interview</h1>
             {problem && (
-              <span className="text-sm text-gray-600">
-                {problem.title}
-              </span>
+              <>
+                <span className="text-gray-300">|</span>
+                <span className="text-sm font-medium text-gray-700">
+                  {problem.title}
+                </span>
+                <Badge
+                  variant={
+                    problem.difficulty === 'easy' ? 'success' :
+                    problem.difficulty === 'medium' ? 'warning' : 'danger'
+                  }
+                  size="sm"
+                >
+                  {problem.difficulty}
+                </Badge>
+                {getStatusBadge()}
+              </>
             )}
           </div>
 
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-4">
             {/* Timer */}
-            <div className="flex items-center space-x-2">
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="font-mono text-lg font-semibold text-gray-900">
-                {formatTime(elapsedTime)}
-              </span>
-            </div>
+            <Tooltip content="Elapsed time" position="bottom">
+              <div className="flex items-center space-x-2 px-3 py-1 bg-gray-100 rounded-lg">
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="font-mono text-lg font-semibold text-gray-900">
+                  {formatTime(elapsedTime)}
+                </span>
+              </div>
+            </Tooltip>
 
             {/* Language Selector */}
             <LanguageSelector language={language} onChange={handleLanguageChange} />
 
             {/* Run Button */}
-            <button
+            <Button
+              variant="success"
+              size="md"
               onClick={handleRunCode}
               disabled={isRunning}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              loading={isRunning}
+              icon={<span>▶️</span>}
             >
-              <span>▶️</span>
-              <span>{isRunning ? 'Running...' : 'Run Code'}</span>
-            </button>
+              Run Code
+            </Button>
+
+            {/* Submit Button */}
+            <Tooltip content="Run all test cases" position="bottom">
+              <Button
+                variant="primary"
+                size="md"
+                onClick={handleRunTests}
+                disabled={isRunning}
+              >
+                Submit
+              </Button>
+            </Tooltip>
 
             {/* End Session */}
-            <button
-              onClick={handleEndSession}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            <Button
+              variant="danger"
+              size="md"
+              onClick={() => setShowEndModal(true)}
             >
               End Session
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -326,7 +375,7 @@ export default function InterviewSession() {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Problem Description */}
-        <div className="w-1/4 overflow-hidden border-r border-gray-200">
+        <div className="w-1/4 overflow-hidden border-r border-gray-200 bg-white">
           <ProblemDisplay problem={problem} />
         </div>
 
@@ -343,14 +392,14 @@ export default function InterviewSession() {
 
           {/* Bottom: Terminal and Test Cases */}
           <div className="h-64 flex border-t border-gray-200">
-            <div className="flex-1">
+            <div className="flex-1 bg-gray-900">
               <Terminal
                 output={terminalOutput}
                 isRunning={isRunning}
                 onClear={() => setTerminalOutput([])}
               />
             </div>
-            <div className="w-1/2 border-l border-gray-200">
+            <div className="w-1/2 border-l border-gray-200 bg-white">
               <TestCasePanel
                 testCases={problem?.testCases}
                 testResults={testResults}
@@ -362,7 +411,7 @@ export default function InterviewSession() {
         </div>
 
         {/* Right: AI Chat */}
-        <div className="w-1/4">
+        <div className="w-1/4 bg-white border-l border-gray-200">
           <ChatInterface
             messages={messages}
             onSendMessage={handleSendMessage}
@@ -370,6 +419,53 @@ export default function InterviewSession() {
           />
         </div>
       </div>
+
+      {/* End Session Modal */}
+      <Modal
+        isOpen={showEndModal}
+        onClose={() => setShowEndModal(false)}
+        title="End Interview Session"
+        size="md"
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => setShowEndModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleEndSession}
+            >
+              End Session
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-gray-700">
+          Are you sure you want to end this interview session? Your progress will be saved, but you won't be able to continue this session later.
+        </p>
+        {testResults && (
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+            <p className="text-sm text-gray-600 mb-2">Current Progress:</p>
+            <ul className="text-sm space-y-1">
+              <li className="flex items-center">
+                <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Tests Passed: {testResults.passed}/{testResults.total}
+              </li>
+              <li className="flex items-center">
+                <svg className="w-4 h-4 text-blue-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                </svg>
+                Time Spent: {formatTime(elapsedTime)}
+              </li>
+            </ul>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
