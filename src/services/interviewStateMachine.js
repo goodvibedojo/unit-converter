@@ -1,5 +1,7 @@
 // Interview State Machine - Controls AI interviewer behavior across interview phases
 
+import { CodeAnalyzer, isCandidateStuck } from './codeAnalyzer.js';
+
 /**
  * Interview Phases:
  * 1. INTRO - AI introduces problem
@@ -60,8 +62,16 @@ export class InterviewStateMachine {
       userMessage,
       code,
       testResults,
-      timeSinceLastCodeChange
+      timeSinceLastCodeChange,
+      language = 'python'
     } = context;
+
+    // Analyze code if provided
+    let codeAnalysis = null;
+    if (code) {
+      const analyzer = new CodeAnalyzer(code, language);
+      codeAnalysis = analyzer.analyze();
+    }
 
     // Auto-detect phase transitions
 
@@ -72,18 +82,36 @@ export class InterviewStateMachine {
       }
     }
 
-    // User started coding
-    if (code && code !== this.lastCodeSnapshot && code.length > 50) {
+    // User started coding - enhanced with code analysis
+    if (code && code !== this.lastCodeSnapshot) {
+      const progress = codeAnalysis?.progress || 0;
+
+      // Transition to CODING if they have meaningful code
       if ([InterviewPhase.INTRO, InterviewPhase.CLARIFICATION].includes(this.currentPhase)) {
-        this.transitionTo(InterviewPhase.CODING);
+        if (progress >= 10 || code.length > 50) {
+          this.transitionTo(InterviewPhase.CODING);
+        }
       }
+
       this.lastCodeSnapshot = code;
       this.codeChangeCount++;
     }
 
-    // User appears stuck (no code changes for 3+ minutes during coding)
-    if (this.currentPhase === InterviewPhase.CODING && timeSinceLastCodeChange > 180000) {
-      this.transitionTo(InterviewPhase.STUCK);
+    // User appears stuck - enhanced with code analysis
+    if (this.currentPhase === InterviewPhase.CODING) {
+      if (code && timeSinceLastCodeChange) {
+        const stuck = isCandidateStuck(code, timeSinceLastCodeChange);
+        if (stuck) {
+          this.transitionTo(InterviewPhase.STUCK);
+        }
+      }
+    }
+
+    // User made progress after being stuck
+    if (this.currentPhase === InterviewPhase.STUCK && code && codeAnalysis) {
+      if (codeAnalysis.progress > 50) {
+        this.transitionTo(InterviewPhase.CODING);
+      }
     }
 
     // User ran tests
@@ -93,11 +121,22 @@ export class InterviewStateMachine {
       this.totalTests = testResults.total;
 
       if (testResults.passed === testResults.total) {
-        // All tests passed - move to complexity discussion
-        this.transitionTo(InterviewPhase.COMPLEXITY);
+        // All tests passed - check if solution looks complete
+        if (codeAnalysis && codeAnalysis.progress >= 70) {
+          this.transitionTo(InterviewPhase.COMPLEXITY);
+        } else {
+          this.transitionTo(InterviewPhase.TESTING);
+        }
       } else {
         // Some tests failed - debugging phase
         this.transitionTo(InterviewPhase.DEBUGGING);
+      }
+    }
+
+    // Debugging successful - tests now pass
+    if (this.currentPhase === InterviewPhase.DEBUGGING && testResults) {
+      if (testResults.passed === testResults.total) {
+        this.transitionTo(InterviewPhase.COMPLEXITY);
       }
     }
 
@@ -105,6 +144,9 @@ export class InterviewStateMachine {
     if (this.currentPhase === InterviewPhase.COMPLEXITY && this.isDiscussingOptimization(userMessage)) {
       this.transitionTo(InterviewPhase.OPTIMIZATION);
     }
+
+    // Store code analysis for later reference
+    this.lastCodeAnalysis = codeAnalysis;
   }
 
   /**
@@ -219,8 +261,76 @@ export class InterviewStateMachine {
       codeChangeCount: this.codeChangeCount,
       testRunCount: this.testRunCount,
       passedTests: this.passedTests,
-      totalTests: this.totalTests
+      totalTests: this.totalTests,
+      lastCodeAnalysis: this.lastCodeAnalysis
     };
+  }
+
+  /**
+   * Get code analysis insights
+   */
+  getCodeInsights() {
+    if (!this.lastCodeAnalysis) {
+      return null;
+    }
+
+    const analysis = this.lastCodeAnalysis;
+    const insights = [];
+
+    // Progress insights
+    if (analysis.progress < 30) {
+      insights.push({
+        type: 'progress',
+        message: 'Still in early stages - needs more implementation',
+        severity: 'info'
+      });
+    } else if (analysis.progress >= 70) {
+      insights.push({
+        type: 'progress',
+        message: 'Solution appears mostly complete',
+        severity: 'success'
+      });
+    }
+
+    // Complexity insights
+    if (analysis.complexity.nestedLoopDepth >= 3) {
+      insights.push({
+        type: 'complexity',
+        message: `High time complexity detected: ${analysis.complexity.timeComplexity}`,
+        severity: 'warning'
+      });
+    }
+
+    // Pattern insights
+    if (analysis.patterns.usesHashMap) {
+      insights.push({
+        type: 'pattern',
+        message: 'Using hash map - good for O(1) lookups',
+        severity: 'success'
+      });
+    }
+
+    // Quality insights
+    if (analysis.quality.score < 50) {
+      insights.push({
+        type: 'quality',
+        message: 'Code quality could be improved - consider adding comments and functions',
+        severity: 'warning'
+      });
+    }
+
+    // Issues
+    if (analysis.issues && analysis.issues.length > 0) {
+      analysis.issues.forEach(issue => {
+        insights.push({
+          type: 'issue',
+          message: issue.message,
+          severity: issue.severity
+        });
+      });
+    }
+
+    return insights;
   }
 
   /**

@@ -10,6 +10,9 @@ import {
   RESPONSE_STYLES
 } from './promptTemplates.js';
 import MockAIEngine from './mockAIEngine.js';
+import { ConversationManager, CostCalculator } from './conversationManager.js';
+import { parseFeedback, generateFeedbackStats } from './feedbackParser.js';
+import { CodeAnalyzer } from './codeAnalyzer.js';
 
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || 'sk-placeholder';
 const USE_MOCK_AI = import.meta.env.VITE_USE_MOCK_AI !== 'false'; // Default to true for development
@@ -24,6 +27,8 @@ class OpenAIService {
     this.conversationHistory = [];
     this.stateMachine = new InterviewStateMachine();
     this.mockEngine = MockAIEngine;
+    this.conversationManager = new ConversationManager(4000);
+    this.costCalculator = new CostCalculator();
     this.currentProblem = null;
     this.sessionStartTime = null;
     this.lastCodeSnapshot = '';
@@ -235,21 +240,15 @@ ${problem.examples.map((ex, i) => `Example ${i + 1}:
 
       const response = await this.callOpenAIWithCustomPrompt(feedbackPrompt);
 
-      // Parse structured feedback from response
-      // For now, return in expected format
-      // TODO: Implement proper parsing of AI response
+      // Parse and structure feedback using parser
+      const parsedFeedback = parseFeedback(response);
+
+      // Generate stats
+      const stats = generateFeedbackStats(parsedFeedback);
+
       return {
-        score: 85,
-        strengths: [
-          'Clear problem understanding',
-          'Good communication',
-          'Working solution implemented'
-        ],
-        improvements: [
-          'Could optimize time complexity',
-          'Consider more edge cases'
-        ],
-        overallFeedback: response
+        ...parsedFeedback,
+        stats
       };
     }
   }
@@ -360,11 +359,57 @@ ${problem.examples.map((ex, i) => `Example ${i + 1}:
     this.responseStyle = style;
   }
 
+  /**
+   * Get cost summary for this session
+   */
+  getCostSummary() {
+    return this.costCalculator.getSummary();
+  }
+
+  /**
+   * Get conversation summary
+   */
+  getConversationSummary() {
+    return this.conversationManager.getSummary();
+  }
+
+  /**
+   * Analyze current code
+   */
+  analyzeCode(code, language = 'python') {
+    const analyzer = new CodeAnalyzer(code, language);
+    return analyzer.analyze();
+  }
+
+  /**
+   * Get code insights from state machine
+   */
+  getCodeInsights() {
+    return this.stateMachine.getCodeInsights();
+  }
+
+  /**
+   * Export session data
+   */
+  exportSession() {
+    return {
+      problem: this.currentProblem,
+      conversationHistory: this.conversationHistory,
+      code: this.lastCodeSnapshot,
+      stats: this.getSessionStats(),
+      costSummary: this.getCostSummary(),
+      phase: this.getCurrentPhase(),
+      timestamp: Date.now()
+    };
+  }
+
   // Reset conversation
   reset() {
     this.conversationHistory = [];
     this.stateMachine.reset();
     this.mockEngine.reset();
+    this.conversationManager.reset();
+    this.costCalculator.reset();
     this.currentProblem = null;
     this.sessionStartTime = null;
     this.lastCodeSnapshot = '';
